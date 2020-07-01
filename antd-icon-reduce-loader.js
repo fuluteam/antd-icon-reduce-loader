@@ -45,9 +45,8 @@ function writeTempFile(content, iconExportName) {
 }
 
 function parseOptions() {
-    var options = loaderUtils.getOptions(this);
-    var { filePath } = options || {};
-    tempFilePath = filePath;
+    var options = loaderUtils.getOptions(this) || {};
+    tempFilePath = options.filePath;
 }
 
 function isCreateIcon(astParam) {
@@ -56,30 +55,34 @@ function isCreateIcon(astParam) {
 function isButton(astParam) {
     return isEleType(astParam, '_button');
 }
-function isEleType(astParam, eleType) {
+function isEleType(astParam, evarype) {
     if (Object.hasOwnProperty.call(astParam, 'name')
-        && astParam.name.toLowerCase() === eleType) {
+        && astParam.name.toLowerCase() === evarype) {
         return true;
     }
     if (Object.hasOwnProperty.call(astParam, 'object')
         && astParam.object.name
-        && astParam.object.name.toLowerCase() === eleType) {
+        && astParam.object.name.toLowerCase() === evarype) {
         return true;
     }
     return false;
 }
 function getIconProps(astParam) {
-    return getEleProps(astParam, ['type', 'theme']);
+    return getEleProps(astParam, ['type', 'theme'], true);
 }
 function getBtnProps(astParam) {
     return getEleProps(astParam, ['icon', 'loading']);
 }
-function getEleProps(astParam, propKeys = []) {
+function getEleProps(astParam, propKeys = [], isIcon = false) {
     var result = {};
     if (isArray(astParam)) {
         for (var i = 0; i < astParam.length; i++) {
             var keyName = astParam[i].key && astParam[i].key.name;
-            if (propKeys.indexOf(keyName) >= 0 && astParam[i].value.value) {
+            if (isIcon && keyName === 'type' && astParam[i].value.type === 'ConditionalExpression') { // type: condition ? 'eye' : 'eye-invisible',
+                result[keyName] = [astParam[i].value.consequent.value, astParam[i].value.alternate.value];
+            } else if (!isIcon && keyName === 'loading') {
+                result.loading = true;
+            } else if (propKeys.indexOf(keyName) >= 0 && astParam[i].value.value) {
                 result[keyName] = astParam[i].value.value;
             }
         }
@@ -108,7 +111,13 @@ module.exports = function(source) {
                         if (Object.keys(iconProps).length > 0) {
                             var type = iconProps.type;
                             var theme = iconProps.theme || 'outline';
-                            searchIconByName(type, theme);
+                            if (isArray(type)) {
+                                type.forEach(function(item) {
+                                    searchIconByName(item, theme);
+                                });
+                            } else {
+                                searchIconByName(type, theme);
+                            }
                         }
                     } else if (isButton(Identifier)) {
                         var btnProps = getBtnProps(ObjectExpression.properties);
