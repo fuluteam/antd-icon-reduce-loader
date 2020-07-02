@@ -6,8 +6,9 @@ var fs = require('fs');
 var traverse = require("@babel/traverse").default;
 
 var tempFilePath = '';
+var initIcons = [];
 var addIconArr = [];
-
+var validTypeArr = ['Literal', 'StringLiteral'];
 function isArray(arrLike) {
     return Object.prototype.toString.call(arrLike) === '[object Array]';
 }
@@ -47,6 +48,7 @@ function writeTempFile(content, iconExportName) {
 function parseOptions() {
     var options = loaderUtils.getOptions(this) || {};
     tempFilePath = options.filePath;
+    initIcons = options.initIcons || [];
 }
 
 function isCreateIcon(astParam) {
@@ -73,13 +75,30 @@ function getIconProps(astParam) {
 function getBtnProps(astParam) {
     return getEleProps(astParam, ['icon', 'loading']);
 }
+function isValidIconType(node) {
+    return validTypeArr.indexOf(node.type) >= 0;
+}
 function getEleProps(astParam, propKeys = [], isIcon = false) {
     var result = {};
     if (isArray(astParam)) {
         for (var i = 0; i < astParam.length; i++) {
             var keyName = astParam[i].key && astParam[i].key.name;
-            if (isIcon && keyName === 'type' && astParam[i].value.type === 'ConditionalExpression') { // type: condition ? 'eye' : 'eye-invisible',
-                result[keyName] = [astParam[i].value.consequent.value, astParam[i].value.alternate.value];
+            if (isIcon && keyName === 'type') { // Icon组件的type属性
+                if (astParam[i].value.type === 'ConditionalExpression') { // type: condition ? 'eye' : 'eye-invisible',
+                    result[keyName] = [];
+                    if (isValidIconType(astParam[i].value.consequent)) {
+                        result[keyName].push(astParam[i].value.consequent.value);
+                    }
+                    if (isValidIconType(astParam[i].value.alternate)) {
+                        result[keyName].push(astParam[i].value.alternate.value);
+                    }
+                } else if (isValidIconType(astParam[i].value)) {
+                    result[keyName] = astParam[i].value.value;
+                }
+            } else if (!isIcon && keyName === 'icon') {
+                if (isValidIconType(astParam[i].value)) {
+                    result[keyName] = astParam[i].value.value;
+                }
             } else if (!isIcon && keyName === 'loading') {
                 result.loading = true;
             } else if (propKeys.indexOf(keyName) >= 0 && astParam[i].value.value) {
@@ -89,11 +108,23 @@ function getEleProps(astParam, propKeys = [], isIcon = false) {
     }
     return result;
 }
+function initOptionIcons() {
+    if (initIcons.length > 0) {
+        initIcons.forEach(function(iconItem) {
+            if (typeof iconItem === 'object') {
+                searchIconByName(iconItem.type, iconItem.theme);
+            } else {
+                searchIconByName(iconItem);
+            }
+        });
+    }
+}
 module.exports = function(source) {
     parseOptions.call(this);
     if (!fs.existsSync(tempFilePath)) {
         return source;
     }
+    initOptionIcons();
     var ast = parser.parse(source, { sourceType: "module", plugins: ['dynamicImport'] });
     traverse(ast, {
         CallExpression: function(path) {
