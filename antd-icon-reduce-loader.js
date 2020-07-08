@@ -3,12 +3,24 @@ var loaderUtils = require('loader-utils');
 var core = require("@babel/core");
 var iconDist = require('@ant-design/icons/lib/dist');
 var fs = require('fs');
+var path = require('path');
 var traverse = require("@babel/traverse").default;
 
 var tempFilePath = '';
 var initIcons = [];
 var addIconArr = [];
 var validTypeArr = ['Literal', 'StringLiteral'];
+var antdMessageFilePath = path.join('node_modules', 'antd', 'lib', 'message', 'index.js');
+var antdNotificationFilePath = path.join('node_modules', 'antd', 'lib', 'notification', 'index.js');
+var messageIcons = [
+    { type: 'info-circle', theme: 'filled' },
+    { type: 'check-circle', theme: 'filled' },
+    { type: 'close-circle', theme: 'filled' },
+    { type: 'exclamation-circle', theme: 'filled' },
+    { type: 'loading', theme: 'outlined' },
+];
+var notificationIcons = ['check-circle', 'info-circle', 'close-circle', 'exclamation-circle'];
+
 function isArray(arrLike) {
     return Object.prototype.toString.call(arrLike) === '[object Array]';
 }
@@ -110,14 +122,17 @@ function getEleProps(astParam, propKeys = [], isIcon = false) {
 }
 function initOptionIcons() {
     if (initIcons.length > 0) {
-        initIcons.forEach(function(iconItem) {
-            if (typeof iconItem === 'object') {
-                searchIconByName(iconItem.type, iconItem.theme);
-            } else {
-                searchIconByName(iconItem);
-            }
-        });
+        searchIcons(initIcons);
     }
+}
+function searchIcons(icons = []) {
+    icons.forEach(function(iconItem) {
+        if (typeof iconItem === 'object') {
+            searchIconByName(iconItem.type, iconItem.theme);
+        } else {
+            searchIconByName(iconItem);
+        }
+    });
 }
 module.exports = function(source) {
     parseOptions.call(this);
@@ -125,6 +140,14 @@ module.exports = function(source) {
         return source;
     }
     initOptionIcons();
+    if (this.resourcePath.indexOf(antdMessageFilePath) > 0) { // antd的message组件代码
+        searchIcons(messageIcons);
+        return source;
+    }
+    if (this.resourcePath.indexOf(antdNotificationFilePath) > 0) {
+        searchIcons(notificationIcons);
+        return source;
+    }
     var ast = parser.parse(source, { sourceType: "module", plugins: ['dynamicImport'] });
     traverse(ast, {
         CallExpression: function(path) {
